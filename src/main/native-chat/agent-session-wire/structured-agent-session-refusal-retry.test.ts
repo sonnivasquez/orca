@@ -18,6 +18,7 @@ import {
 } from '../../../shared/agent-session-refusal-retry'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
@@ -103,17 +104,9 @@ async function createHarness(options: { attached?: boolean } = {}) {
   return harness
 }
 
-async function abandonHost(host: StructuredAgentSessionHost): Promise<void> {
-  host['runtimeState'].stopLeaseRenewal()
-  host['holds'].dispose()
-  host['conversationDelivery'].loop.dispose()
-  await Promise.all([...host['sessions'].values()].map((session) => session.journal.close()))
-  host['sessions'].clear()
-}
-
 afterEach(async () => {
   const completed = harnesses.splice(0)
-  await Promise.all(completed.map(async ({ host }) => abandonHost(host)))
+  await Promise.all(completed.map(async ({ host }) => abandonStructuredAgentSessionHost(host)))
   await Promise.all(completed.map(async ({ root }) => rm(root, { recursive: true })))
 })
 

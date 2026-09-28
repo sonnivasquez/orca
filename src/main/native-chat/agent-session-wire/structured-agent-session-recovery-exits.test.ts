@@ -10,6 +10,7 @@ import { AgentSessionRecordStore } from '../../runtime/agent-session-record-stor
 import { readProcessStartTimeMs } from '../../runtime/agent-session-process-identity-probe'
 import { createStructuredAgentSessionOwnerProbe } from '../../runtime/structured-agent-session-owner-probe'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
@@ -82,17 +83,8 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
   })
 }
 
-async function abandonHost(abandonedHost: StructuredAgentSessionHost): Promise<void> {
-  abandonedHost['runtimeState'].stopLeaseRenewal()
-  abandonedHost['holds'].dispose()
-  await Promise.all(
-    [...abandonedHost['sessions'].values()].map((session) => session.journal.close())
-  )
-  abandonedHost['sessions'].clear()
-}
-
 async function reopenStore(): Promise<void> {
-  await abandonHost(host)
+  await abandonStructuredAgentSessionHost(host)
   store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
 }
 
@@ -119,8 +111,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await abandonHost(host)
-  await Promise.all([...supersededHosts].map(abandonHost))
+  await abandonStructuredAgentSessionHost(host)
+  await Promise.all([...supersededHosts].map(abandonStructuredAgentSessionHost))
   supersededHosts.clear()
   await Promise.all([...spawnedOwners].map((child) => stopOwner(child)))
   await rm(root, { recursive: true, force: true })
