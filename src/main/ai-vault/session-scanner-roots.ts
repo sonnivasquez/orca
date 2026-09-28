@@ -5,7 +5,7 @@ import { resolveOmpSessionsDir } from './omp-session-root'
 // The default local roots for the two agents whose subagent transcripts are
 // read back by renderer-supplied path (Claude and OMP). Discovery scans these;
 // the IPC listers use the root enumerations below to reject arbitrary paths.
-const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
+export const DEFAULT_CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 
 // The local host and each WSL distro's `~/.claude/projects`. Callers reading
 // Claude session files by path use these roots to reject arbitrary paths.
@@ -18,7 +18,7 @@ export function claudeProjectsRootDirs(args: {
   wslHomeDirs?: readonly string[]
 }): string[] {
   return uniqueSessionRootDirs([
-    args.claudeProjectsDir ?? CLAUDE_PROJECTS_DIR,
+    args.claudeProjectsDir ?? DEFAULT_CLAUDE_PROJECTS_DIR,
     ...(args.additionalClaudeProjectsDirs ?? []),
     ...(args.wslHomeDirs ?? []).map((homeDir) => join(homeDir, '.claude', 'projects'))
   ])

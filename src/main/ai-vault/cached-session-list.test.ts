@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 
@@ -142,14 +143,14 @@ describe('additionalClaudeProjectsDirs', () => {
   })
 
   it('resolves $CLAUDE_CONFIG_DIR plus configured account dirs, excluding the default', () => {
+    const workConfigDir = join('/tmp', 'orca-test-claude-work')
+    const personalConfigDir = join('/tmp', 'orca-test-claude-personal')
     configureAiVaultSessionSources({
-      getAdditionalClaudeConfigDirs: () => ['/home/ada/.claude-personal']
+      getAdditionalClaudeConfigDirs: () => [personalConfigDir]
     })
     expect(
-      additionalClaudeProjectsDirs({
-        CLAUDE_CONFIG_DIR: '/home/ada/.claude-work'
-      } as NodeJS.ProcessEnv)
-    ).toEqual(['/home/ada/.claude-work/projects', '/home/ada/.claude-personal/projects'])
+      additionalClaudeProjectsDirs({ CLAUDE_CONFIG_DIR: workConfigDir } as NodeJS.ProcessEnv)
+    ).toEqual([join(workConfigDir, 'projects'), join(personalConfigDir, 'projects')])
   })
 
   it('returns no extra roots when env is unset and no account dirs are configured', () => {

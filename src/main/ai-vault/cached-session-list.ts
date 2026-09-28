@@ -13,6 +13,7 @@ import { prepareOpenCodeWslReaders } from './opencode-wsl-runtime-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
+import { DEFAULT_CLAUDE_PROJECTS_DIR } from './session-scanner-roots'
 import {
   aiVaultSessionDepthCovers,
   requestedAiVaultSessionDepth,
@@ -56,6 +57,11 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
   sources = next
 }
 
+/**
+ * The trees a local scan enumerates, resolved fresh because a WSL distro can start
+ * or stop between scans. The search index reads the same function, so it walks
+ * exactly what the session list walks.
+ */
 export async function localAiVaultScanRoots(): Promise<
   Required<
     Pick<
@@ -95,7 +101,7 @@ export function configuredAdditionalClaudeConfigDirs(): readonly string[] {
 // already the primary root, and downstream dedupe would drop it anyway.
 // Sync so the subagent-transcript allowlist reads the same set as discovery.
 export function additionalClaudeProjectsDirs(env: NodeJS.ProcessEnv = process.env): string[] {
-  const defaultProjectsDir = join(homedir(), '.claude', 'projects')
+  const defaultProjectsDir = DEFAULT_CLAUDE_PROJECTS_DIR
   const candidates = [
     join(resolveAbsoluteDirOverride(env.CLAUDE_CONFIG_DIR, join(homedir(), '.claude')), 'projects'),
     ...configuredAdditionalClaudeConfigDirs().map((dir) => join(dir, 'projects'))
