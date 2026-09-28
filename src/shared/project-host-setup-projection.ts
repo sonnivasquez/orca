@@ -132,6 +132,27 @@ export function getProjectIdForProviderIdentity(identity: ProjectProviderIdentit
   return `github:${githubRepoIdentityKey(identity)}`
 }
 
+// Why: `--project` only accepts the derived provider identity for this flow, so
+// a mismatch must print the runnable value instead of a dead end. Returns the
+// narrowed identity for the caller's link step.
+export function requireMatchingProviderIdentity(
+  identity: ProjectProviderIdentity | undefined | null,
+  projectId: string
+): ProjectProviderIdentity {
+  if (!identity) {
+    throw new Error(
+      `Imported folder has no GitHub provider identity to match project "${projectId}". Pass --project "github:<owner>/<repo>" matching the folder's origin remote.`
+    )
+  }
+  const derived = getProjectIdForProviderIdentity(identity)
+  if (derived !== projectId) {
+    throw new Error(
+      `Imported folder resolves to project "${derived}" which does not match "${projectId}". Pass --project "${derived}" — provider folders only accept their derived github:<owner>/<repo> identity.`
+    )
+  }
+  return identity
+}
+
 function getProjectId(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): string {
