@@ -1,5 +1,5 @@
 /**
- * The cell box xterm lays out, per text size, so the first subscribe after ready carries the phone's dims.
+ * The cell box xterm laid out in one document, so the first subscribe after ready carries the phone's dims.
  *
  * The document builds its terminal before it reports ready, puts that box in `web-ready`, and
  * reports it again whenever xterm lays out a different one.

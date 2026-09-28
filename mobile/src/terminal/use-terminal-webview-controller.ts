@@ -159,7 +159,9 @@ export function useTerminalWebViewController(
 
       if (msg.type === 'web-ready') {
         // Why: nothing subscribes before ready, so a ready's box only sizes the subscribe after it.
-        cellBoxRef.current = readTerminalCellMetrics(msg)[0] ?? null
+        // A box at another scale (a reload keeps the mount's) leaves the route unmeasured.
+        cellBoxRef.current =
+          readTerminalCellMetrics(msg).find((entry) => entry.fontScale === textScale) ?? null
         confirmWebReady(true)
       } else if (
         msg.type === 'pong' &&
@@ -221,7 +223,8 @@ export function useTerminalWebViewController(
       onFileTap,
       onOpenUrl,
       onTextScaleChange,
-      onCellBoxChange
+      onCellBoxChange,
+      textScale
     ]
   )
 
@@ -236,6 +239,8 @@ export function useTerminalWebViewController(
     pendingPingIdRef.current = null
     pendingMessages.clear()
     writeCoalescer.clear()
+    cellBoxRef.current = null
+    lastGridRef.current = null
     armWebReadyWatchdog()
   }, [armWebReadyWatchdog, pendingMessages, writeCoalescer])
 

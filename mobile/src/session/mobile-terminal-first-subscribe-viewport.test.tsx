@@ -177,7 +177,7 @@ afterEach(() => {
 })
 
 describe('a terminal first subscribe', () => {
-  it('does not subscribe before its document is ready, even at a text size laid out before', async () => {
+  it('does not subscribe before its document is ready, then subscribes once from its box', async () => {
     const harness = subscriptionHarness({ fit: PHONE, webReady: false })
     harness.subscribe()
     expect(harness.order).toEqual([])
@@ -187,16 +187,6 @@ describe('a terminal first subscribe', () => {
     await act(async () => {})
     expect(harness.order).toEqual(['subscribe {"cols":55,"rows":44}', 'init 55x44'])
     expect(harness.terminal.measureFitDimensions).not.toHaveBeenCalled()
-  })
-
-  it('inits once when a reload replaces the document before its first ready', async () => {
-    const harness = subscriptionHarness({ fit: PHONE, webReady: false })
-    harness.subscribe()
-    // The first document never reports ready; the reloaded one does.
-    harness.documentReady()
-    harness.scrollback(0, PHONE.cols, PHONE.rows)
-    await act(async () => {})
-    expect(harness.order).toEqual(['subscribe {"cols":55,"rows":44}', 'init 55x44'])
   })
 
   it('resubscribes a document reloaded after its first ready, which lost its terminal', async () => {

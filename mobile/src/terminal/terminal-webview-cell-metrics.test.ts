@@ -90,22 +90,6 @@ describe('the cell box xterm laid out', () => {
     expect(postedTypes()).not.toContain('measure')
   })
 
-  it('has no fit for a later open until its own document reports ready', () => {
-    mount().notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    const second = mount()
-    expect(second.handle().fitDimensions(FRAME)).toBeNull()
-    second.notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    expect(second.handle().fitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
-  })
-
-  it("never refits on a ready's box: nothing subscribed before it", () => {
-    const { notify, onCellBoxChange, webView } = mount()
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    act(() => webView().props.onLoadStart())
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale, 7.8)] })
-    expect(onCellBoxChange).not.toHaveBeenCalled()
-  })
-
   it('refits when the box changes at the same grid, as after a renderer swap', () => {
     const { handle, notify, onCellBoxChange } = mount()
     notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
@@ -175,6 +159,26 @@ describe('the cell box xterm laid out', () => {
     act(() => webView().props.onLoadStart())
     notify({ type: 'web-ready', cellMetrics: [] })
     expect(handle().fitDimensions(FRAME)).toBeNull()
+  })
+
+  it("fits only from a ready box at the app's text scale", () => {
+    const { handle, notify, webView } = mount(1.5)
+    // A document built at mount keeps that scale; a reload after a text-size change reports it.
+    notify({ type: 'web-ready', cellMetrics: [cellAt(1)] })
+    expect(handle().fitDimensions(FRAME)).toBeNull()
+    act(() => webView().props.onLoadStart())
+    notify({ type: 'web-ready', cellMetrics: [cellAt(1.5)] })
+    expect(handle().fitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
+  })
+
+  it("does not refit a reloaded document's first DOM report at the old document's grid", () => {
+    const { notify, onCellBoxChange, webView } = mount()
+    notify({ type: 'web-ready', cellMetrics: [cellAt(scale, 7.8)] })
+    notify(cellMetrics(7.8, 54))
+    act(() => webView().props.onLoadStart())
+    notify({ type: 'web-ready', cellMetrics: [cellAt(scale, 7.8)] })
+    notify(cellMetrics(7.9, 54))
+    expect(onCellBoxChange).not.toHaveBeenCalled()
   })
 
   it('measures the live document for a refit, against the frame the app laid out', async () => {
