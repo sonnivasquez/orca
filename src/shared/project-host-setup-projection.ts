@@ -141,13 +141,13 @@ export function requireMatchingProviderIdentity(
 ): ProjectProviderIdentity {
   if (!identity) {
     throw new Error(
-      `Imported folder has no GitHub provider identity to match project "${projectId}". Pass --project "github:<owner>/<repo>" matching the folder's origin remote.`
+      `Imported folder carries no provider identity to match project "${projectId}". If it is a GitHub checkout, pass --project "github:<owner>/<repo>" ("github:<host>/<owner>/<repo>" for Enterprise hosts) matching its origin remote.`
     )
   }
   const derived = getProjectIdForProviderIdentity(identity)
   if (derived !== projectId) {
     throw new Error(
-      `Imported folder resolves to project "${derived}" which does not match "${projectId}". Pass --project "${derived}" — provider folders only accept their derived github:<owner>/<repo> identity.`
+      `Imported folder resolves to project "${derived}" which does not match "${projectId}". Pass --project "${derived}". Provider folders only accept their derived identity (github:<owner>/<repo>, github:<host>/<owner>/<repo> for Enterprise hosts).`
     )
   }
   return identity

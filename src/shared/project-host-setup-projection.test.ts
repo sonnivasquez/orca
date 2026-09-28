@@ -616,7 +616,7 @@ describe('requireMatchingProviderIdentity', () => {
 
   it('names the missing identity and the expected shape when there is none', () => {
     expect(() => requireMatchingProviderIdentity(undefined, 'github:acme/orca')).toThrow(
-      'Imported folder has no GitHub provider identity to match project "github:acme/orca"'
+      'Imported folder carries no provider identity to match project "github:acme/orca"'
     )
   })
 })

@@ -288,7 +288,7 @@ describe('OrcaRuntimeService', () => {
           path: tempRoot,
           kind: 'git'
         })
-      ).rejects.toThrow('has no GitHub provider identity')
+      ).rejects.toThrow('no provider identity')
 
       expect(repos).toHaveLength(0)
     } finally {
@@ -332,7 +332,7 @@ describe('OrcaRuntimeService', () => {
         url: 'https://git.example.test/acme/orca.git',
         destination: '/tmp'
       })
-    ).rejects.toThrow('has no GitHub provider identity')
+    ).rejects.toThrow('no provider identity')
 
     expect(repos).toHaveLength(0)
   })
