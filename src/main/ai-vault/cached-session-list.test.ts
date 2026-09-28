@@ -27,6 +27,8 @@ vi.mock('../wsl', () => ({
 vi.mock('../wsl-running-path-filter', () => ({ filterPathsToRunningWslDistrosAsync }))
 
 import {
+  additionalClaudeProjectsDirs,
+  configureAiVaultSessionSources,
   getAiVaultWslHomeDirs,
   invalidateAiVaultSessionListCache,
   listAiVaultSessions,
@@ -128,5 +130,35 @@ describe('invalidateAiVaultSessionListCache generation guard', () => {
 
     await expect(getAiVaultWslHomeDirs()).resolves.toEqual([])
     expect(listRunningWslHomeDirsAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('additionalClaudeProjectsDirs', () => {
+  beforeEach(() => {
+    resetAiVaultSessionListCacheForTests()
+  })
+  afterEach(() => {
+    resetAiVaultSessionListCacheForTests()
+  })
+
+  it('resolves $CLAUDE_CONFIG_DIR plus configured account dirs, excluding the default', () => {
+    configureAiVaultSessionSources({
+      getAdditionalClaudeConfigDirs: () => ['/home/ada/.claude-personal']
+    })
+    expect(
+      additionalClaudeProjectsDirs({
+        CLAUDE_CONFIG_DIR: '/home/ada/.claude-work'
+      } as NodeJS.ProcessEnv)
+    ).toEqual(['/home/ada/.claude-work/projects', '/home/ada/.claude-personal/projects'])
+  })
+
+  it('returns no extra roots when env is unset and no account dirs are configured', () => {
+    expect(additionalClaudeProjectsDirs({} as NodeJS.ProcessEnv)).toEqual([])
+  })
+
+  it('ignores a relative CLAUDE_CONFIG_DIR override', () => {
+    expect(
+      additionalClaudeProjectsDirs({ CLAUDE_CONFIG_DIR: 'relative/dir' } as NodeJS.ProcessEnv)
+    ).toEqual([])
   })
 })
