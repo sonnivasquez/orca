@@ -22,14 +22,11 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
 
     const {
       clearEngineError,
-      viewGeneration,
       engineError,
       handle,
-      isCurrentView,
       receive,
       reportNativeEngineError,
-      replaceDocument,
-      handleLoadStart
+      resetReadiness
     } = useTerminalWebViewController(props, {
       post,
       // iOS can preserve the native view while discarding its JS/backing-store state.
@@ -53,40 +50,27 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
         } catch {
           return
         }
-        receive(msg, viewGeneration)
+        receive(msg)
       },
-      [viewGeneration, receive]
-    )
-
-    // Why: a replaced view keeps its last props; none of its events may act on the current document.
-    const fromThisView = useCallback(
-      <Event,>(handler: (event: Event) => void) =>
-        (event: Event) => {
-          if (isCurrentView(viewGeneration)) {
-            handler(event)
-          }
-        },
-      [isCurrentView, viewGeneration]
+      [receive]
     )
 
     const handleReload = useCallback(() => {
       clearEngineError()
-      replaceDocument()
-    }, [clearEngineError, replaceDocument])
+      webViewRef.current?.reload()
+    }, [clearEngineError])
 
     const handleContentProcessDidTerminate = useCallback(() => {
       // Why: WKWebView content-process loss is recoverable; stale commands belong
       // to the dead document and the replacement must prove readiness before replay.
-      replaceDocument()
+      resetReadiness()
       clearEngineError()
-    }, [clearEngineError, replaceDocument])
+      webViewRef.current?.reload()
+    }, [clearEngineError, resetReadiness])
 
     return (
       <View style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, props.style]}>
-        {/* Why: a new view per document, not reload(): a reloading view still delivers its old
-            document's messages, and only a view's own onMessage can say which document sent one. */}
         <WebView
-          key={viewGeneration}
           ref={webViewRef}
           source={source}
           style={TERMINAL_WEBVIEW_FRAME_STYLES.webview}
@@ -100,18 +84,14 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
           // Why: Android WebView defaults textZoom to the system font scale, inflating
           // xterm's DOM glyphs past its canvas-measured cell grid (#4579). iOS ignores it.
           textZoom={100}
-          onLoadStart={fromThisView(handleLoadStart)}
+          onLoadStart={resetReadiness}
           onMessage={handleMessage}
-          onError={fromThisView((event) =>
-            reportNativeEngineError('Terminal WebView load failed', event)
-          )}
-          onHttpError={fromThisView((event) =>
-            reportNativeEngineError('Terminal WebView HTTP error', event)
-          )}
-          onRenderProcessGone={fromThisView((event) =>
+          onError={(event) => reportNativeEngineError('Terminal WebView load failed', event)}
+          onHttpError={(event) => reportNativeEngineError('Terminal WebView HTTP error', event)}
+          onRenderProcessGone={(event) =>
             reportNativeEngineError('Terminal WebView render process ended', event)
-          )}
-          onContentProcessDidTerminate={fromThisView(handleContentProcessDidTerminate)}
+          }
+          onContentProcessDidTerminate={handleContentProcessDidTerminate}
         />
         {engineError ? (
           <TerminalWebViewEngineErrorOverlay message={engineError} onReload={handleReload} />

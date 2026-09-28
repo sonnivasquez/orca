@@ -1,9 +1,9 @@
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
 import type { MutableRef, TerminalViewportDims } from './mobile-terminal-viewport-resubscribe'
 
-export type TerminalViewportSeedArgs = {
+export type TerminalViewportFromCellBoxArgs = {
   handle: string
-  ref: Pick<TerminalWebViewHandle, 'seedFitDimensions'> | undefined
+  ref: Pick<TerminalWebViewHandle, 'fitDimensions'> | undefined
   viewportRef: MutableRef<TerminalViewportDims | null>
   viewportMeasuredRef: MutableRef<boolean>
   terminalFrameWidthRef: MutableRef<number>
@@ -16,16 +16,16 @@ export type TerminalViewportSeedArgs = {
 }
 
 /**
- * Gives an unmeasured route its viewport from the cell box xterm laid out at this text size, so the
+ * Gives an unmeasured route its viewport from the cell box the ready document reported, so the
  * subscribe about to go out carries phone dims and the host serializes the snapshot at the phone's
- * size. Without a known box it leaves the route unmeasured.
+ * size. Without a box it leaves the route unmeasured.
  */
-export function seedTerminalViewportFromCellMetrics(args: TerminalViewportSeedArgs): void {
+export function sizeTerminalViewportFromCellBox(args: TerminalViewportFromCellBoxArgs): void {
   if (args.viewportMeasuredRef.current || !args.ref) {
     return
   }
   const frameHeight = args.terminalFrameHeightRef.current
-  const dims = args.ref.seedFitDimensions({
+  const dims = args.ref.fitDimensions({
     width: args.terminalFrameWidthRef.current,
     height: frameHeight
   })

@@ -1,6 +1,6 @@
 import { createElement, createRef } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalWebView } from './TerminalWebView'
 import type { TerminalWebViewHandle } from './terminal-webview-contract'
 
@@ -33,27 +33,21 @@ vi.mock('react-native-webview', async () => {
 vi.mock('lucide-react-native', () => ({ RefreshCw: 'RefreshCw' }))
 
 const FRAME = { width: 427, height: 710 }
-
-// Why: the store lives for the app, so each case takes a text size no other case has laid out.
-let lastScale = 2
-const freshScale = () => (lastScale += 0.01)
-let scale = freshScale()
+const scale = 1
 const cellAt = (fontScale: number, cellWidth = 23 / 3) => ({ fontScale, cellWidth, cellHeight: 15 })
 
 const renderers: ReactTestRenderer[] = []
-beforeEach(() => {
-  scale = freshScale()
-})
 afterEach(() => {
   act(() => renderers.splice(0).forEach((renderer) => renderer.unmount()))
   nativeWebViewMethods.postMessage.mockClear()
+  nativeWebViewMethods.reload.mockClear()
   vi.useRealTimers()
 })
 
 function mount(textScale = scale) {
   const ref = createRef<TerminalWebViewHandle>()
   const onCellBoxChange = vi.fn()
-  const onWebReady = vi.fn<(document: { hasInit: boolean }) => void>()
+  const onWebReady = vi.fn<() => void>()
   let renderer: ReactTestRenderer | undefined
   act(() => {
     renderer = create(
@@ -67,14 +61,12 @@ function mount(textScale = scale) {
     }
     return ref.current
   }
+  const webView = () => renderer!.root.find((node) => typeof node.props.onMessage === 'function')
   const notify = (payload: Record<string, unknown>) => {
     act(() => {
-      renderer!.root
-        .find((node) => typeof node.props.onMessage === 'function')
-        .props.onMessage({ nativeEvent: { data: JSON.stringify(payload) } })
+      webView().props.onMessage({ nativeEvent: { data: JSON.stringify(payload) } })
     })
   }
-  const webView = () => renderer!.root.find((node) => typeof node.props.onMessage === 'function')
   return { handle, notify, onCellBoxChange, onWebReady, webView }
 }
 
@@ -98,17 +90,20 @@ describe('the cell box xterm laid out', () => {
     expect(postedTypes()).not.toContain('measure')
   })
 
-  it('lets a later open at the same text size fit before its document is ready', () => {
-    const first = mount()
-    first.notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+  it('has no fit for a later open until its own document reports ready', () => {
+    mount().notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
     const second = mount()
+    expect(second.handle().fitDimensions(FRAME)).toBeNull()
+    second.notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
     expect(second.handle().fitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
   })
 
-  it('does not fit a text size nothing has laid out yet', () => {
-    const first = mount()
-    first.notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    expect(mount(freshScale()).handle().fitDimensions(FRAME)).toBeNull()
+  it("never refits on a ready's box: nothing subscribed before it", () => {
+    const { notify, onCellBoxChange, webView } = mount()
+    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+    act(() => webView().props.onLoadStart())
+    notify({ type: 'web-ready', cellMetrics: [cellAt(scale, 7.8)] })
+    expect(onCellBoxChange).not.toHaveBeenCalled()
   })
 
   it('refits when the box changes at the same grid, as after a renderer swap', () => {
@@ -130,22 +125,6 @@ describe('the cell box xterm laid out', () => {
     expect(onCellBoxChange).not.toHaveBeenCalled()
   })
 
-  it('refits an open that subscribed from a stored box when its document lays out another', () => {
-    mount().notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    const second = mount()
-    second.notify({ type: 'web-ready', cellMetrics: [cellAt(scale, 7.8)] })
-    expect(second.onCellBoxChange).toHaveBeenCalledTimes(1)
-  })
-
-  it('refits when the first box after a boxless ready differs from the one the subscribe used', () => {
-    mount().notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    const second = mount()
-    expect(second.handle().seedFitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
-    second.notify({ type: 'web-ready', cellMetrics: [] })
-    second.notify(cellMetrics(7.8, 55))
-    expect(second.onCellBoxChange).toHaveBeenCalledTimes(1)
-  })
-
   it("does not refit a width change to a new grid when the DOM renderer reports that grid's box", () => {
     const { handle, notify, onCellBoxChange } = mount()
     notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
@@ -159,7 +138,7 @@ describe('the cell box xterm laid out', () => {
   it('refits a renderer swap at a grid applied in place, which the document reported unchanged box and all', () => {
     const { handle, notify, onCellBoxChange } = mount()
     notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    expect(handle().seedFitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
+    notify(cellMetrics(23 / 3, 55))
     // A width change applied in place: the WebGL box is unchanged, and the new grid is reported.
     handle().reflow(50, 47)
     notify(cellMetrics(23 / 3, 50))
@@ -175,19 +154,6 @@ describe('the cell box xterm laid out', () => {
     handle().reflow(50, 47)
     notify(cellMetrics(7.9, 50))
     expect(onCellBoxChange).not.toHaveBeenCalled()
-  })
-
-  it("refits a DOM seed once on its first report, and not again on the refit's own report", () => {
-    mount().notify({ type: 'web-ready', cellMetrics: [cellAt(scale, 7.8)] })
-    const { handle, notify, onCellBoxChange } = mount()
-    expect(handle().seedFitDimensions(FRAME)).toEqual({ cols: 54, rows: 47 })
-    notify({ type: 'web-ready', cellMetrics: [] })
-    // The DOM renderer's box at the seeded grid: its width follows cols, so it differs.
-    notify(cellMetrics(7.9, 54))
-    expect(onCellBoxChange).toHaveBeenCalledTimes(1)
-    handle().reflow(53, 47)
-    notify(cellMetrics(8.05, 53))
-    expect(onCellBoxChange).toHaveBeenCalledTimes(1)
   })
 
   it('measures the live document for a refit, against the frame the app laid out', async () => {
@@ -211,30 +177,30 @@ describe('the cell box xterm laid out', () => {
     expect(postedTypes()).not.toContain('measure')
   })
 
-  it('keeps an init queued before the first document loads, as a subscribe from the store does', () => {
+  it('sends nothing before a ready: a load start drops what was queued', () => {
     const { handle, notify, webView } = mount()
     handle().init(55, 47, 'snapshot')
-    act(() => webView().props.onLoadStart())
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    expect(postedTypes()).toContain('init')
-  })
-
-  it('drops what was queued for a document that a reload replaces', () => {
-    const { handle, notify, webView } = mount()
-    act(() => webView().props.onLoadStart())
-    handle().init(55, 47, 'snapshot')
+    expect(postedTypes()).toEqual([])
     act(() => webView().props.onLoadStart())
     notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
     expect(postedTypes()).not.toContain('init')
   })
 
-  it('drops queued and coalesced commands on either replacement: a reload or a new view', () => {
+  it('reloads the same view when its content process ends', () => {
+    const { webView } = mount()
+    const view = webView()
+    act(() => view.props.onContentProcessDidTerminate({ nativeEvent: {} }))
+    expect(nativeWebViewMethods.reload).toHaveBeenCalledTimes(1)
+    expect(webView()).toBe(view)
+  })
+
+  it('drops queued and coalesced commands on a reload or a lost content process', () => {
     vi.useFakeTimers()
     const { handle, notify, webView } = mount()
     act(() => webView().props.onLoadStart())
     handle().write('for the reloaded document')
     act(() => webView().props.onLoadStart())
-    handle().write('for the replaced view')
+    handle().write('for the lost content process')
     act(() => webView().props.onContentProcessDidTerminate({ nativeEvent: {} }))
     notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
     act(() => {
@@ -246,102 +212,6 @@ describe('the cell box xterm laid out', () => {
       vi.runAllTimers()
     })
     expect(postedTypes()).toContain('write')
-  })
-
-  it('tells the session a document that lost its queued init to a reload before its first ready', () => {
-    const { handle, notify, onWebReady, webView } = mount()
-    act(() => webView().props.onLoadStart())
-    handle().init(55, 47, 'snapshot')
-    act(() => webView().props.onLoadStart())
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    expect(onWebReady).toHaveBeenLastCalledWith({ hasInit: false })
-  })
-
-  it('tells the session the first document holds an init queued for it', () => {
-    const { handle, notify, onWebReady, webView } = mount()
-    handle().init(55, 47, 'snapshot')
-    act(() => webView().props.onLoadStart())
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    expect(onWebReady).toHaveBeenLastCalledWith({ hasInit: true })
-  })
-
-  it('tells the session a reloaded document never saw the init the last one was given', () => {
-    const { handle, notify, onWebReady, webView } = mount()
-    act(() => webView().props.onLoadStart())
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    handle().init(55, 47, 'snapshot')
-    act(() => webView().props.onLoadStart())
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    expect(onWebReady).toHaveBeenLastCalledWith({ hasInit: false })
-  })
-
-  it('lets only the current document take a ready: one a reload replaced delivers nothing', () => {
-    const { handle, onWebReady, webView } = mount()
-    // The session's resubscribe: a document without the init is sent one.
-    onWebReady.mockImplementation(({ hasInit }) => {
-      if (!hasInit) {
-        handle().init(55, 47, 'snapshot')
-      }
-    })
-    act(() => webView().props.onLoadStart())
-    handle().init(55, 47, 'snapshot')
-    const oldDocument = webView().props.onMessage
-    act(() => webView().props.onContentProcessDidTerminate({ nativeEvent: {} }))
-    act(() => webView().props.onLoadStart())
-    nativeWebViewMethods.postMessage.mockClear()
-    const ready = { nativeEvent: { data: JSON.stringify({ type: 'web-ready' }) } }
-    act(() => oldDocument(ready))
-    expect(postedTypes()).toEqual([])
-    expect(onWebReady).not.toHaveBeenCalled()
-    act(() => webView().props.onMessage(ready))
-    expect(postedTypes().filter((type) => type === 'init')).toHaveLength(1)
-    expect(onWebReady).toHaveBeenCalledTimes(1)
-  })
-
-  it('drops every notify from a document a reload replaced, not only its ready', () => {
-    const { handle, notify, onCellBoxChange, webView } = mount()
-    act(() => webView().props.onLoadStart())
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    notify(cellMetrics(23 / 3, 55))
-    const oldDocument = webView().props.onMessage
-    act(() => webView().props.onContentProcessDidTerminate({ nativeEvent: {} }))
-    act(() => oldDocument({ nativeEvent: { data: JSON.stringify(cellMetrics(7.8, 55)) } }))
-    expect(onCellBoxChange).not.toHaveBeenCalled()
-    expect(handle().fitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
-  })
-
-  it('ignores a load start from a view a replacement unmounted', () => {
-    const { handle, notify, webView } = mount()
-    act(() => webView().props.onLoadStart())
-    const oldLoadStart = webView().props.onLoadStart
-    act(() => webView().props.onContentProcessDidTerminate({ nativeEvent: {} }))
-    act(() => webView().props.onLoadStart())
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    act(() => oldLoadStart())
-    nativeWebViewMethods.postMessage.mockClear()
-    handle().init(55, 47, 'snapshot')
-    expect(postedTypes()).toEqual(['init'])
-  })
-
-  it('ignores every lifecycle event from a view a replacement unmounted', () => {
-    const { handle, notify, webView } = mount()
-    act(() => webView().props.onLoadStart())
-    const oldView = webView().props
-    act(() => oldView.onContentProcessDidTerminate({ nativeEvent: {} }))
-    const currentView = webView()
-    act(() => currentView.props.onLoadStart())
-    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
-    act(() => {
-      oldView.onContentProcessDidTerminate({ nativeEvent: {} })
-      oldView.onRenderProcessGone({ nativeEvent: { didCrash: true } })
-      oldView.onError({ nativeEvent: { description: 'late' } })
-      oldView.onHttpError({ nativeEvent: { statusCode: 500 } })
-    })
-    expect(webView()).toBe(currentView)
-    expect(currentView.parent?.findAll((node) => node.props.onReload !== undefined)).toEqual([])
-    nativeWebViewMethods.postMessage.mockClear()
-    handle().init(55, 47, 'snapshot')
-    expect(postedTypes()).toEqual(['init'])
   })
 
   it('tells the document the app text scale before it builds its terminal', () => {

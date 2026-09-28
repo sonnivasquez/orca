@@ -123,8 +123,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // the other's body. The hook and string counts are C7.2's and stand.
 // Refreshed once more for the two dictation failure handlers, which now both call
 // `reportDictationFailure` instead of each choosing between the setup sheet and a toast.
-// Refreshed when web-ready began resubscribing any document that lacks the subscription's init.
-const HEAD_CALLBACK_BODY_SHA256 = '63be5ee0ce52d1d04bdaa05deffbe374787797bd687c2bf5354df6c85356e30b'
+// Refreshed when the subscribe began waiting for web-ready again and web-ready took back main's
+// reload rule (`handleTerminalWebReady` lost its `documentHasInit` parameter).
+const HEAD_CALLBACK_BODY_SHA256 = '57082e382216ab5482e70f6804754126d5dd413dc9d15ce4cc5ae5dca96758e6'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built

@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
-import { readTerminalCellMetrics, terminalCellBoxes } from './terminal-cell-metrics'
-import { useTerminalViewGeneration } from './terminal-view-generation'
+import { createTerminalCellBoxStore, readTerminalCellMetrics } from './terminal-cell-metrics'
 import { holdGrid } from './terminal-held-grid'
-import { createDocumentInitTracker } from './terminal-document-init-tracker'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { useTerminalWebViewEngineErrorState } from './terminal-webview-engine-error-state'
 import { useTerminalWebReadyWatchdog } from './terminal-webview-ready-watchdog'
@@ -78,10 +76,10 @@ export function useTerminalWebViewController(
   // document's init() rAF chain ends with a 'ready' notify that resolves it. measureFitDimensions
   // awaits this so it doesn't race ahead of term.open() / renderService population.
   const promises = useTerminalWebViewReadyPromises()
+  const cellBoxes = useMemo(() => createTerminalCellBoxStore(), [])
   // Why: a box that changes while the grid does not is a renderer or pixel-ratio change and needs a
   // refit; one that arrives with a new grid is that grid's own (the DOM renderer's width follows cols).
-  // The last grid is the one last reported, or fitted from the stored box, across documents. The
-  // document reports every grid change, so an in-place reflow is held before a later renderer swap.
+  // The document reports every grid change, so an in-place reflow is held before a later renderer swap.
   const lastGridRef = useRef<string | null>(null)
   const { clearEngineError, engineError, reportEngineError, reportNativeEngineError } =
     useTerminalWebViewEngineErrorState(onEngineError)
@@ -90,17 +88,14 @@ export function useTerminalWebViewController(
     reportEngineError
   )
 
-  const initTracker = useMemo(() => createDocumentInitTracker(), [])
-
   const sendToDocument = useCallback(
     (msg: TerminalWebViewCommand) => {
-      initTracker.delivered(msg)
       messageIdRef.current += 1
       const id = messageIdRef.current
       post({ ...msg, id })
       return id
     },
-    [initTracker, post]
+    [post]
   )
 
   const flushPendingMessages = useCallback(() => {
@@ -131,22 +126,6 @@ export function useTerminalWebViewController(
     }
   }, [writeCoalescer])
 
-  /**
-   * The document is gone or about to be replaced: nothing queued belongs to the next one.
-   *
-   * Why: messages queued for a previous generation are stale after a reload; dropping them avoids
-   * replaying terminal chunks before the next init snapshot.
-   */
-  const resetReadiness = useCallback(() => {
-    isWebReadyRef.current = false
-    pendingPingIdRef.current = null
-    pendingMessages.clear()
-    writeCoalescer.clear()
-    armWebReadyWatchdog()
-  }, [armWebReadyWatchdog, pendingMessages, writeCoalescer])
-  const { viewGeneration, handleLoadStart, isCurrentView, replaceDocument } =
-    useTerminalViewGeneration(resetReadiness, armWebReadyWatchdog)
-
   const confirmWebReady = useCallback(
     (notifyParent: boolean) => {
       pendingPingIdRef.current = null
@@ -154,7 +133,7 @@ export function useTerminalWebViewController(
       clearWebReadyWatchdog()
       clearEngineError()
       if (notifyParent) {
-        onWebReady?.({ hasInit: initTracker.readyDocumentHasInit(pendingMessages.holds('init')) })
+        onWebReady?.()
       }
       // Why: reload clears queued commands, so readiness must always restore the
       // native-selected theme even when its value did not change in React.
@@ -165,32 +144,23 @@ export function useTerminalWebViewController(
       clearEngineError,
       clearWebReadyWatchdog,
       flushPendingMessages,
-      initTracker,
       onWebReady,
-      pendingMessages,
       sendToDocument,
       terminalTheme
     ]
   )
 
-  /** One notify, already parsed, from the document the view built for `generation`. */
+  /** One notify from the document, already parsed. */
   const receive = useCallback(
-    (msg: Record<string, unknown>, generation: number) => {
-      if (!isCurrentView(generation)) {
-        return
-      }
+    (msg: Record<string, unknown>) => {
       routeTerminalQueryReply(msg, onTerminalQueryReply)
 
       if (msg.type === 'web-ready') {
-        initTracker.documentReady()
-        // Why: an open that subscribed before ready used the stored box; a different one here refits it.
-        const changed = readTerminalCellMetrics(msg).some(
-          (entry) => terminalCellBoxes.record(entry) && entry.fontScale === textScale
-        )
-        confirmWebReady(true)
-        if (changed) {
-          onCellBoxChange?.()
+        // Why: nothing subscribes before ready, so a ready's box only sizes the subscribe after it.
+        for (const entry of readTerminalCellMetrics(msg)) {
+          cellBoxes.record(entry)
         }
+        confirmWebReady(true)
       } else if (
         msg.type === 'pong' &&
         typeof msg.pingId === 'number' &&
@@ -205,7 +175,7 @@ export function useTerminalWebViewController(
       } else if (msg.type === 'cell-metrics') {
         const [laidOut] = readTerminalCellMetrics(msg)
         const sameGrid = holdGrid(lastGridRef, msg.cols, msg.rows)
-        if (laidOut && terminalCellBoxes.record(laidOut) && sameGrid) {
+        if (laidOut && cellBoxes.record(laidOut) && sameGrid) {
           onCellBoxChange?.()
         }
       } else if (msg.type === 'measure-result') {
@@ -228,8 +198,8 @@ export function useTerminalWebViewController(
       }
     },
     [
+      cellBoxes,
       confirmWebReady,
-      isCurrentView,
       promises,
       reportEngineError,
       onSelectionMode,
@@ -244,10 +214,23 @@ export function useTerminalWebViewController(
       onFileTap,
       onOpenUrl,
       onTextScaleChange,
-      onCellBoxChange,
-      textScale
+      onCellBoxChange
     ]
   )
+
+  /**
+   * The document is gone or about to be replaced: nothing queued belongs to the next one.
+   *
+   * Why: messages queued for a previous generation are stale after a reload; dropping them avoids
+   * replaying terminal chunks before the next init snapshot.
+   */
+  const resetReadiness = useCallback(() => {
+    isWebReadyRef.current = false
+    pendingPingIdRef.current = null
+    pendingMessages.clear()
+    writeCoalescer.clear()
+    armWebReadyWatchdog()
+  }, [armWebReadyWatchdog, pendingMessages, writeCoalescer])
 
   useEffect(() => {
     postMessage({ type: 'set-theme', terminalTheme })
@@ -260,8 +243,8 @@ export function useTerminalWebViewController(
   }, [postMessage, textScale])
 
   const fitDimensions = useCallback(
-    (frame: { width: number; height: number }) => terminalCellBoxes.fit(textScale, frame),
-    [textScale]
+    (frame: { width: number; height: number }) => cellBoxes.fit(textScale, frame),
+    [cellBoxes, textScale]
   )
 
   const handle = useMemo<TerminalWebViewHandle>(
@@ -317,13 +300,6 @@ export function useTerminalWebViewController(
         postMessage({ type: 'clear' })
       },
       fitDimensions,
-      seedFitDimensions(frame: { width: number; height: number }) {
-        const fit = fitDimensions(frame)
-        if (fit) {
-          holdGrid(lastGridRef, fit.cols, fit.rows)
-        }
-        return fit
-      },
       measureFitDimensions(frameHeight: number, frameWidth: number) {
         // Why: no fit until the frame is laid out; the layout's own refit measures then.
         if (!isWebReadyRef.current || !(frameHeight > 0 && frameWidth > 0)) {
@@ -361,13 +337,10 @@ export function useTerminalWebViewController(
     armWebReadyWatchdog,
     clearEngineError,
     confirmWebReady,
-    viewGeneration,
     engineError,
     handle,
-    isCurrentView,
     receive,
     reportNativeEngineError,
-    replaceDocument,
-    handleLoadStart
+    resetReadiness
   }
 }

@@ -227,7 +227,7 @@ describe('TerminalWebView engine errors', () => {
     }
   })
 
-  it('replaces a terminated iOS content process and restores theme on readiness', () => {
+  it('reloads a terminated iOS content process and restores theme on readiness', () => {
     const terminalRef = createRef<TerminalWebViewHandle>()
     const { onEngineError, renderer } = createTerminalWebViewRenderer(vi.fn(), {
       ref: terminalRef,
@@ -245,9 +245,7 @@ describe('TerminalWebView engine errors', () => {
       terminalRef.current?.write('after termination')
     })
 
-    // A new view for the new document, so the dead one's messages cannot be taken for its own.
-    expect(renderer.root.findByType('WebView')).not.toBe(webView)
-    expect(nativeWebViewMethods.reload).not.toHaveBeenCalled()
+    expect(nativeWebViewMethods.reload).toHaveBeenCalledTimes(1)
     expect(nativeWebViewMethods.postMessage).not.toHaveBeenCalled()
     expect(onEngineError).not.toHaveBeenCalled()
 

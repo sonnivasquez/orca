@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
-import { seedTerminalViewportFromCellMetrics } from './mobile-terminal-first-subscribe-viewport'
+import { sizeTerminalViewportFromCellBox } from './mobile-terminal-first-subscribe-viewport'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 import { TerminalViewportResubscribeBudget } from './mobile-terminal-viewport-resubscribe'
 import type { MobileSessionTerminalSubscriptionFoundationModel } from './use-mobile-session-terminal-subscription-foundation'
@@ -13,14 +13,14 @@ import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-w
 const HANDLE = 'term-1'
 const PHONE = { cols: 55, rows: 44 }
 
-describe('seedTerminalViewportFromCellMetrics', () => {
-  function seedArgs(
-    seedFitDimensions: (frame: { width: number; height: number }) => typeof PHONE | null
+describe('sizeTerminalViewportFromCellBox', () => {
+  function sizeArgs(
+    fitDimensions: (frame: { width: number; height: number }) => typeof PHONE | null
   ) {
     const viewportRef: { current: typeof PHONE | null } = { current: null }
     return {
       handle: HANDLE,
-      ref: { seedFitDimensions: vi.fn(seedFitDimensions) },
+      ref: { fitDimensions: vi.fn(fitDimensions) },
       viewportRef,
       viewportMeasuredRef: { current: false },
       terminalFrameWidthRef: { current: 427.5 },
@@ -29,27 +29,27 @@ describe('seedTerminalViewportFromCellMetrics', () => {
     }
   }
 
-  it('sizes an unmeasured route from the stored cell box against the laid-out frame', () => {
-    const args = seedArgs(() => PHONE)
-    seedTerminalViewportFromCellMetrics(args)
-    expect(args.ref.seedFitDimensions).toHaveBeenCalledWith({ width: 427.5, height: 751 })
+  it('sizes an unmeasured route from the reported cell box against the laid-out frame', () => {
+    const args = sizeArgs(() => PHONE)
+    sizeTerminalViewportFromCellBox(args)
+    expect(args.ref.fitDimensions).toHaveBeenCalledWith({ width: 427.5, height: 751 })
     expect(args.viewportRef.current).toEqual(PHONE)
     expect(args.viewportMeasuredRef.current).toBe(true)
     expect(args.onMeasured).toHaveBeenCalledWith(HANDLE, PHONE, 751)
   })
 
   it('leaves the route unmeasured when the document reported no cell box', () => {
-    const args = seedArgs(() => null)
-    seedTerminalViewportFromCellMetrics(args)
+    const args = sizeArgs(() => null)
+    sizeTerminalViewportFromCellBox(args)
     expect(args.viewportMeasuredRef.current).toBe(false)
     expect(args.viewportRef.current).toBeNull()
   })
 
   it('keeps a measured viewport', () => {
-    const args = seedArgs(() => PHONE)
+    const args = sizeArgs(() => PHONE)
     args.viewportMeasuredRef.current = true
-    seedTerminalViewportFromCellMetrics(args)
-    expect(args.ref.seedFitDimensions).not.toHaveBeenCalled()
+    sizeTerminalViewportFromCellBox(args)
+    expect(args.ref.fitDimensions).not.toHaveBeenCalled()
   })
 })
 
@@ -72,7 +72,6 @@ function subscriptionHarness(opts: {
     reflow: vi.fn(),
     clear: vi.fn(),
     fitDimensions: vi.fn(() => fit),
-    seedFitDimensions: vi.fn(() => fit),
     measureFitDimensions: vi.fn(async () => fit ?? PHONE),
     resetZoom: vi.fn(),
     cancelSelect: vi.fn(),
@@ -137,7 +136,7 @@ function subscriptionHarness(opts: {
     readFileTab: vi.fn()
   }
   let subscribe: ((handle: string) => void) | undefined
-  let webReady: ((handle: string, documentHasInit: boolean) => void) | undefined
+  let webReady: ((handle: string) => void) | undefined
   function Probe() {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook destructures only the fields built above.
     const scope = fields as unknown as MobileSessionTerminalSubscriptionFoundationModel
@@ -160,14 +159,9 @@ function subscriptionHarness(opts: {
     subscribe: () => act(() => subscribe!(HANDLE)),
     scrollback,
     terminal,
-    // The document's web-ready: xterm's box is now in the store, so the fit answers.
-    reportReady: (next: typeof PHONE) => {
-      fit = next
-      webReadyHandlesRef.current.add(HANDLE)
-    },
-    // The document's web-ready, saying whether it holds the init the subscription gave the terminal.
-    documentReady: (hasInit: boolean) => {
-      act(() => webReady!(HANDLE, hasInit))
+    // The document's web-ready, carrying the box xterm laid out.
+    documentReady: () => {
+      act(() => webReady!(HANDLE))
     },
     layOutFrame: (width: number) => {
       terminalFrameWidthRef.current = width
@@ -182,12 +176,11 @@ afterEach(() => {
 })
 
 describe('a terminal first subscribe', () => {
-  it('waits, on the first open at a text size, for the document to report the box xterm laid out', async () => {
-    const harness = subscriptionHarness({ fit: null, webReady: false })
+  it('does not subscribe before its document is ready, even at a text size laid out before', async () => {
+    const harness = subscriptionHarness({ fit: PHONE, webReady: false })
     harness.subscribe()
     expect(harness.order).toEqual([])
-    harness.reportReady(PHONE)
-    harness.subscribe()
+    harness.documentReady()
     expect(harness.order).toEqual(['subscribe {"cols":55,"rows":44}'])
     harness.scrollback(0, PHONE.cols, PHONE.rows)
     await act(async () => {})
@@ -195,40 +188,28 @@ describe('a terminal first subscribe', () => {
     expect(harness.terminal.measureFitDimensions).not.toHaveBeenCalled()
   })
 
-  it('subscribes at once from the stored box when the text size was laid out before', async () => {
+  it('inits once when a reload replaces the document before its first ready', async () => {
     const harness = subscriptionHarness({ fit: PHONE, webReady: false })
     harness.subscribe()
-    expect(harness.order).toEqual(['subscribe {"cols":55,"rows":44}'])
+    // The first document never reports ready; the reloaded one does.
+    harness.documentReady()
     harness.scrollback(0, PHONE.cols, PHONE.rows)
     await act(async () => {})
     expect(harness.order).toEqual(['subscribe {"cols":55,"rows":44}', 'init 55x44'])
-    expect(harness.terminal.measureFitDimensions).not.toHaveBeenCalled()
   })
 
-  it('re-inits a document that lost the queued init to a reload before its first ready', async () => {
+  it('resubscribes a document reloaded after its first ready, which lost its terminal', async () => {
     const harness = subscriptionHarness({ fit: PHONE, webReady: false })
-    harness.subscribe()
+    harness.documentReady()
     harness.scrollback(0, PHONE.cols, PHONE.rows)
     await act(async () => {})
-    harness.documentReady(false)
+    harness.documentReady()
     harness.scrollback(1, PHONE.cols, PHONE.rows)
     await act(async () => {})
-    expect(harness.order).toEqual([
-      'subscribe {"cols":55,"rows":44}',
+    expect(harness.order.filter((step) => step.startsWith('init'))).toEqual([
       'init 55x44',
-      'subscribe {"cols":55,"rows":44}',
       'init 55x44'
     ])
-  })
-
-  it('leaves a document that holds its queued init alone at its first ready', async () => {
-    const harness = subscriptionHarness({ fit: PHONE, webReady: false })
-    harness.subscribe()
-    harness.scrollback(0, PHONE.cols, PHONE.rows)
-    await act(async () => {})
-    harness.documentReady(true)
-    await act(async () => {})
-    expect(harness.order).toEqual(['subscribe {"cols":55,"rows":44}', 'init 55x44'])
   })
 
   it('holds a ready document without a box until its frame is laid out', () => {

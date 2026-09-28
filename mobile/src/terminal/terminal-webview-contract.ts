@@ -73,8 +73,7 @@ export type TerminalWebViewProps = {
   textScale?: number
   // Why: only a view shown when it mounts builds its terminal before ready (one WebGL context each).
   shownAtMount?: boolean
-  /** `hasInit`: this document holds the latest init the terminal was given (none given: false). */
-  onWebReady?: (document: { hasInit: boolean }) => void
+  onWebReady?: () => void
   onEngineError?: (message: string) => void
 } & TerminalSelectionEvents
 
@@ -96,13 +95,8 @@ export type TerminalWebViewHandle = {
   // latest output. No-op on the alternate screen.
   reflow: (cols: number, rows: number) => void
   clear: () => void
-  /** The fit for this frame from the cell box xterm laid out at the current text size; null until one is known. */
+  /** The fit for this frame from the cell box this view's document reported; null until its ready. */
   fitDimensions: (frame: { width: number; height: number }) => { cols: number; rows: number } | null
-  /** The first subscribe's fit, which the document's first report is then checked against. */
-  seedFitDimensions: (frame: {
-    width: number
-    height: number
-  }) => { cols: number; rows: number } | null
   // Why: the frame box React Native laid out; the document fits it with the app's own formula.
   measureFitDimensions: (
     frameHeight: number,

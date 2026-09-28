@@ -1,5 +1,5 @@
 /**
- * The cell box xterm lays out, per text size, so a first subscribe can carry the phone's dims.
+ * The cell box xterm lays out, per text size, so the first subscribe after ready carries the phone's dims.
  *
  * The document builds its terminal before it reports ready, puts that box in `web-ready`, and
  * reports it again whenever xterm lays out a different one.
@@ -37,7 +37,7 @@ export function readTerminalCellMetrics(msg: Record<string, unknown>): TerminalC
   return entries
 }
 
-/** The boxes xterm laid out, per text size. */
+/** The boxes one view's documents laid out, per text size. */
 export function createTerminalCellBoxStore() {
   const cells = new Map<number, TerminalCellMetrics>()
   return {
@@ -59,9 +59,3 @@ export function createTerminalCellBoxStore() {
     }
   }
 }
-
-/**
- * For the app's lifetime, so an open at a text size already laid out sizes its first subscribe
- * before its document is ready; the first open at a size waits for that document's report.
- */
-export const terminalCellBoxes = createTerminalCellBoxStore()

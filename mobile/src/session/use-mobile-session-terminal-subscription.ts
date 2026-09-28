@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { isTerminalOscLinkRanges } from '../../../src/shared/terminal-osc-link-ranges'
 import * as nativeChatTerminalStream from './mobile-native-chat-terminal-stream'
-import { seedTerminalViewportFromCellMetrics } from './mobile-terminal-first-subscribe-viewport'
+import { sizeTerminalViewportFromCellBox } from './mobile-terminal-first-subscribe-viewport'
 import { subscribeMobileTerminalSafely } from './mobile-terminal-stream-subscribe'
 import { mobileTerminalSnapshotByteBudget } from './terminal-snapshot-byte-budget'
 import {
@@ -79,7 +79,11 @@ export function useMobileSessionTerminalSubscription(
           logSkippedGate('no-webview-ref')
           return
         }
-        seedTerminalViewportFromCellMetrics({
+        if (!webReadyHandlesRef.current.has(handle)) {
+          logSkippedGate('webview-not-ready')
+          return
+        }
+        sizeTerminalViewportFromCellBox({
           handle,
           ref,
           viewportRef,
@@ -89,18 +93,10 @@ export function useMobileSessionTerminalSubscription(
           onMeasured: (measuredHandle, dims, frameHeight) =>
             diagnostics.viewportMeasured(measuredHandle, dims, frameHeight)
         })
-        // Why: with the phone's dims in hand the subscribe need not wait for the document; the
-        // commands it causes queue until the document is ready.
-        if (!viewportMeasuredRef.current) {
-          if (!webReadyHandlesRef.current.has(handle)) {
-            logSkippedGate('webview-not-ready')
-            return
-          }
-          // Why: the frame's first layout subscribes it; going now would miss the dims (page web-ready precedes it).
-          if (!(terminalFrameWidthRef.current > 0)) {
-            logSkippedGate('frame-not-laid-out')
-            return
-          }
+        // Why: the frame's first layout subscribes it; going now would miss the dims (page web-ready precedes it).
+        if (!viewportMeasuredRef.current && !(terminalFrameWidthRef.current > 0)) {
+          logSkippedGate('frame-not-laid-out')
+          return
         }
       }
 

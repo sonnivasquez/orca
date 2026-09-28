@@ -41,7 +41,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   }, [])
 
   const handleTerminalWebReady = useCallback(
-    (handle: string, documentHasInit: boolean) => {
+    (handle: string) => {
       const wasAlreadyReady = webReadyHandlesRef.current.has(handle)
       webReadyHandlesRef.current.add(handle)
       nativeChatStream.notifyWebReady(handle, wasAlreadyReady)
@@ -50,9 +50,8 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         wasAlreadyReady,
         handle === activeHandleRef.current
       )
-      if (initializedHandlesRef.current.has(handle) && !documentHasInit) {
-        // Why: the subscription owes this document its init — a reload replaced the one that had it,
-        // or dropped it while queued before the first ready — so resubscribe for a fresh scrollback.
+      if (wasAlreadyReady && initializedHandlesRef.current.has(handle)) {
+        // Why: WebView reloaded (hot reload / Android churn); old xterm buffer is gone, so resubscribe for a fresh scrollback.
         unsubscribeTerminal(handle)
         initializedHandlesRef.current.delete(handle)
         if (handle === activeHandleRef.current) {
@@ -71,7 +70,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     [nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
   )
 
-  /** The frame has a size: an open whose text size has a known cell box subscribes now. */
+  /** The frame has a size: a ready document held back for it subscribes now. */
   const handleTerminalFrameLayout = useCallback(() => {
     const handle = pendingActiveTerminalHandleRef.current ?? activeHandleRef.current
     if (handle && !terminalUnsubsRef.current.has(handle)) {

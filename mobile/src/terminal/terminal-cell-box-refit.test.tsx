@@ -21,12 +21,11 @@ function refitHarness(measured: TerminalViewportDims) {
     resize: vi.fn(),
     reflow: vi.fn(),
     clear: vi.fn(),
-    // The stored box: 23/3 px cells, 47 rows.
+    // The reported box: 23/3 px cells, 47 rows.
     fitDimensions: vi.fn((frame: { width: number }) => ({
       cols: Math.floor(frame.width / (23 / 3)),
       rows: 47
     })),
-    seedFitDimensions: vi.fn(),
     measureFitDimensions: vi.fn(async () => measured),
     resetZoom: vi.fn(),
     cancelSelect: vi.fn(),

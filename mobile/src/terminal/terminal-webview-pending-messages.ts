@@ -51,7 +51,5 @@ export function createTerminalWebViewPendingMessages() {
     }
   }
 
-  const holds = (type: TerminalWebViewCommand['type']) => pending.some((msg) => msg.type === type)
-
-  return { clear, flush, holds, queue }
+  return { clear, flush, queue }
 }
