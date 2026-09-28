@@ -15,12 +15,12 @@ const PHONE = { cols: 55, rows: 44 }
 
 describe('sizeTerminalViewportFromCellBox', () => {
   function sizeArgs(
-    fitDimensions: (frame: { width: number; height: number }) => typeof PHONE | null
+    subscribeFitDimensions: (frame: { width: number; height: number }) => typeof PHONE | null
   ) {
     const viewportRef: { current: typeof PHONE | null } = { current: null }
     return {
       handle: HANDLE,
-      ref: { fitDimensions: vi.fn(fitDimensions) },
+      ref: { subscribeFitDimensions: vi.fn(subscribeFitDimensions) },
       viewportRef,
       viewportMeasuredRef: { current: false },
       terminalFrameWidthRef: { current: 427.5 },
@@ -32,7 +32,7 @@ describe('sizeTerminalViewportFromCellBox', () => {
   it('sizes an unmeasured route from the reported cell box against the laid-out frame', () => {
     const args = sizeArgs(() => PHONE)
     sizeTerminalViewportFromCellBox(args)
-    expect(args.ref.fitDimensions).toHaveBeenCalledWith({ width: 427.5, height: 751 })
+    expect(args.ref.subscribeFitDimensions).toHaveBeenCalledWith({ width: 427.5, height: 751 })
     expect(args.viewportRef.current).toEqual(PHONE)
     expect(args.viewportMeasuredRef.current).toBe(true)
     expect(args.onMeasured).toHaveBeenCalledWith(HANDLE, PHONE, 751)
@@ -49,7 +49,7 @@ describe('sizeTerminalViewportFromCellBox', () => {
     const args = sizeArgs(() => PHONE)
     args.viewportMeasuredRef.current = true
     sizeTerminalViewportFromCellBox(args)
-    expect(args.ref.fitDimensions).not.toHaveBeenCalled()
+    expect(args.ref.subscribeFitDimensions).not.toHaveBeenCalled()
   })
 })
 
@@ -72,6 +72,7 @@ function subscriptionHarness(opts: {
     reflow: vi.fn(),
     clear: vi.fn(),
     fitDimensions: vi.fn(() => fit),
+    subscribeFitDimensions: vi.fn(() => fit),
     measureFitDimensions: vi.fn(async () => fit ?? PHONE),
     resetZoom: vi.fn(),
     cancelSelect: vi.fn(),

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
-import { createTerminalCellBoxStore, readTerminalCellMetrics } from './terminal-cell-metrics'
+import { readTerminalCellMetrics, type TerminalCellMetrics } from './terminal-cell-metrics'
+import { fitDimensionsFromCell } from './terminal-grid-fit'
 import { holdGrid } from './terminal-held-grid'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { useTerminalWebViewEngineErrorState } from './terminal-webview-engine-error-state'
@@ -76,7 +77,8 @@ export function useTerminalWebViewController(
   // document's init() rAF chain ends with a 'ready' notify that resolves it. measureFitDimensions
   // awaits this so it doesn't race ahead of term.open() / renderService population.
   const promises = useTerminalWebViewReadyPromises()
-  const cellBoxes = useMemo(() => createTerminalCellBoxStore(), [])
+  // The box the current document last reported; its re-reports cover a text-size change.
+  const cellBoxRef = useRef<TerminalCellMetrics | null>(null)
   // Why: a box that changes while the grid does not is a renderer or pixel-ratio change and needs a
   // refit; one that arrives with a new grid is that grid's own (the DOM renderer's width follows cols).
   // The document reports every grid change, so an in-place reflow is held before a later renderer swap.
@@ -157,9 +159,7 @@ export function useTerminalWebViewController(
 
       if (msg.type === 'web-ready') {
         // Why: nothing subscribes before ready, so a ready's box only sizes the subscribe after it.
-        for (const entry of readTerminalCellMetrics(msg)) {
-          cellBoxes.record(entry)
-        }
+        cellBoxRef.current = readTerminalCellMetrics(msg)[0] ?? null
         confirmWebReady(true)
       } else if (
         msg.type === 'pong' &&
@@ -175,7 +175,15 @@ export function useTerminalWebViewController(
       } else if (msg.type === 'cell-metrics') {
         const [laidOut] = readTerminalCellMetrics(msg)
         const sameGrid = holdGrid(lastGridRef, msg.cols, msg.rows)
-        if (laidOut && cellBoxes.record(laidOut) && sameGrid) {
+        const previous = cellBoxRef.current
+        if (!laidOut) {
+          return
+        }
+        cellBoxRef.current = laidOut
+        const changed =
+          previous !== null &&
+          (previous.cellWidth !== laidOut.cellWidth || previous.cellHeight !== laidOut.cellHeight)
+        if (changed && sameGrid) {
           onCellBoxChange?.()
         }
       } else if (msg.type === 'measure-result') {
@@ -198,7 +206,6 @@ export function useTerminalWebViewController(
       }
     },
     [
-      cellBoxes,
       confirmWebReady,
       promises,
       reportEngineError,
@@ -242,10 +249,12 @@ export function useTerminalWebViewController(
     postMessage({ type: 'set-font-scale', fontScale: textScale })
   }, [postMessage, textScale])
 
-  const fitDimensions = useCallback(
-    (frame: { width: number; height: number }) => cellBoxes.fit(textScale, frame),
-    [cellBoxes, textScale]
-  )
+  const fitDimensions = useCallback((frame: { width: number; height: number }) => {
+    const cell = cellBoxRef.current
+    return cell && frame.width > 0 && frame.height > 0
+      ? fitDimensionsFromCell(cell, frame.width, frame.height)
+      : null
+  }, [])
 
   const handle = useMemo<TerminalWebViewHandle>(
     () => ({
@@ -300,6 +309,14 @@ export function useTerminalWebViewController(
         postMessage({ type: 'clear' })
       },
       fitDimensions,
+      subscribeFitDimensions(frame: { width: number; height: number }) {
+        const fit = fitDimensions(frame)
+        // Why: the DOM renderer's first report at this grid then reads as a new box, refit once.
+        if (fit) {
+          holdGrid(lastGridRef, fit.cols, fit.rows)
+        }
+        return fit
+      },
       measureFitDimensions(frameHeight: number, frameWidth: number) {
         // Why: no fit until the frame is laid out; the layout's own refit measures then.
         if (!isWebReadyRef.current || !(frameHeight > 0 && frameWidth > 0)) {

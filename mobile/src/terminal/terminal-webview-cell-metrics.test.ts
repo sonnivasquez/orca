@@ -156,6 +156,27 @@ describe('the cell box xterm laid out', () => {
     expect(onCellBoxChange).not.toHaveBeenCalled()
   })
 
+  it("refits a DOM subscribe once on its first report, and not again on the refit's own report", () => {
+    const { handle, notify, onCellBoxChange } = mount()
+    notify({ type: 'web-ready', cellMetrics: [cellAt(scale, 7.8)] })
+    expect(handle().subscribeFitDimensions(FRAME)).toEqual({ cols: 54, rows: 47 })
+    // The DOM renderer's box at the subscribed grid: its width follows cols, so it differs.
+    notify(cellMetrics(8, 54))
+    expect(onCellBoxChange).toHaveBeenCalledTimes(1)
+    expect(handle().fitDimensions(FRAME)).toEqual({ cols: 53, rows: 47 })
+    handle().reflow(53, 47)
+    notify(cellMetrics(8.05, 53))
+    expect(onCellBoxChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('fits from the box the current document reported, not one an earlier document did', () => {
+    const { handle, notify, webView } = mount()
+    notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
+    act(() => webView().props.onLoadStart())
+    notify({ type: 'web-ready', cellMetrics: [] })
+    expect(handle().fitDimensions(FRAME)).toBeNull()
+  })
+
   it('measures the live document for a refit, against the frame the app laid out', async () => {
     const { handle, notify } = mount()
     notify({ type: 'web-ready', cellMetrics: [cellAt(scale)] })
