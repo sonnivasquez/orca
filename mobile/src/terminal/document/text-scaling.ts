@@ -78,8 +78,8 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
     }
     const cellW = getCellWidth(scope)
     const cellH = getCellHeight(scope)
-    // Why: fit the frame React Native laid out, by the same formula; init and measure give it, and a
-    // document without either has no terminal to resize.
+    // Why: fit the frame React Native laid out, by the same formula; init and measure give it. Before
+    // either, the pre-ready terminal stays hidden until the first init, which applies the font and resizes.
     const frame = scope.hostFrame
     if (!frame) {
       return
