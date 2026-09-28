@@ -5,7 +5,6 @@ import { scheduleDocumentFrame } from './document-frame-registry'
 import { applyFitScale, getCellHeight } from './fit-scale'
 import { fitDimensionsFromCell } from '../terminal-grid-fit'
 import { getCellWidth } from './viewport-transform'
-import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 
 // Why: init() flips ready false on every re-init (live width reflow included)
 // while the old surface stays visible; a document-scoped latch drives the
@@ -65,6 +64,8 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
   }
   const px = fontPxForScale(scale)
   if (scope.term.options.fontSize === px) {
+    // Why: a pinch moved the drawn pitch; the fit commit is the one site that reports it.
+    applyFitScale(scope, 'text-scale')
     return
   }
   scope.term.options.fontSize = px
@@ -77,21 +78,21 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
     }
     const cellW = getCellWidth(scope)
     const cellH = getCellHeight(scope)
-    // Why: fit the frame React Native measured with, by the same formula; with none yet, the
-    // app's text-scale refit measures and resizes.
-    if (cellW > 0 && cellH > 0 && scope.hostFrame) {
+    // Why: fit the frame React Native measured with, by the same formula; a subscribe sized from
+    // the ready box sends no measure, so until one the document's own viewport stands in.
+    const frame = scope.hostFrame ?? scope.viewportRect()
+    if (cellW > 0 && cellH > 0) {
       const fit = fitDimensionsFromCell(
         { cellWidth: cellW, cellHeight: cellH },
-        scope.hostFrame.width,
-        scope.hostFrame.height
+        frame.width,
+        frame.height
       )
       if (!fit) {
-        // Why: too narrow; the next box must refit at the new cell size.
-        scope.fittedBox = null
+        // Why: too narrow to resize the grid, but the fit still tracks the new cell size; hidden hosts hold it.
+        applyFitScale(scope, 'text-scale')
         return
       }
       scope.term.resize(fit.cols, fit.rows)
-      emitKeyboardAvoidanceMetrics(scope)
     }
     applyFitScale(scope, 'text-scale')
   })

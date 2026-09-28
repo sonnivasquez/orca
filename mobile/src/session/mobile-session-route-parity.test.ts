@@ -123,9 +123,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // the other's body. The hook and string counts are C7.2's and stand.
 // Refreshed once more for the two dictation failure handlers, which now both call
 // `reportDictationFailure` instead of each choosing between the setup sheet and a toast.
-// Refreshed when the subscribe began waiting for web-ready again and web-ready took back main's
-// reload rule (`handleTerminalWebReady` lost its `documentHasInit` parameter).
-const HEAD_CALLBACK_BODY_SHA256 = '57082e382216ab5482e70f6804754126d5dd413dc9d15ce4cc5ae5dca96758e6'
+// Moved when the metrics handler compared every field, the row pitch included (main).
+// Again when the subscribe waited for web-ready and `handleTerminalWebReady` lost `documentHasInit`.
+const HEAD_CALLBACK_BODY_SHA256 = '5c7d6f46710fc7549477cc197631ceefee7123b4f444a0aac0f2c771c7ca64e2'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
@@ -183,15 +183,19 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // onLayout rather than reusing the loading View. Native measured 47 rows before and after: its
 // frame reported either way, and its window is its frame, so both measure paths agree there.
 //
-// 530 -> 531: `'frame-not-laid-out'`, the subscribe gate that waits for the frame's first layout.
+// 531 -> 530, and the host-JSX and style hashes: the key left, and one `contentFrame` View wraps
+// every branch and carries the frame's onLayout, so the page's frame mounts with it. The page measured
+// 47 rows before and after; native was measured only on main's bundle (47), and the wrapper is a
+// flex:1 View around the same flex:1 frame, so its box is the frame's.
+// Count unchanged: `'frame-not-laid-out'`, the gate awaiting the frame's first layout, replaced `'measuring-viewport'`.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '0a5fc85705f0dbb7e84fd1b22d97f344b2258432d3f7bd79c74644d721f97529'
+  '83ae65d5c5ae056504f4d08bb4aa524b42d82f70d8e44035ccdd6a2d9021a387'
 // Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now.
 // Moved again when the terminal frame kept its laid-out width unrounded, for every fit.
-const HEAD_HOST_JSX_SHA256 = '648765319d0351245b4748677983e3b7908423a70f37d2fd772489c7164c8b86'
+const HEAD_HOST_JSX_SHA256 = 'f9474c6da241ce3313b2c84cfdeb6134e3c223502b91bf6819faaf14be896d66'
 const HEAD_LEAF_JSX_SHA256 = '62eb05c6e2ac0be6d553a141fc8aa1641fcb0c678777d5d539f490aab8648417'
 const HEAD_STYLE_REFERENCE_SHA256 =
-  '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
+  '56a005a1f65b30c11092e3422caef67810e1ec50f66fdd06471c370138b1eeb6'
 const HEAD_IDENTITY_FIELD_SHA256 =
   '91146853930a34dd1f3d80e5c97fbacd7cf19fb93dd26fe8fc6f29169622f9d6'
 const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
@@ -631,14 +635,14 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(531)
+    expect(strings).toHaveLength(530)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
-    expect(jsx.host).toHaveLength(124)
+    expect(jsx.host).toHaveLength(125)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
     expect(jsx.leaf).toHaveLength(61)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
-    expect(jsx.styleReferences).toHaveLength(172)
+    expect(jsx.styleReferences).toHaveLength(173)
     expect(hash(jsx.styleReferences)).toBe(HEAD_STYLE_REFERENCE_SHA256)
   })
 })

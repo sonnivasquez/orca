@@ -84,7 +84,7 @@ export function MobileSessionActiveContent({
     toastAnimatedStyle,
     createTabBusy
   } = controller
-  return showLoadingState ? (
+  const content = showLoadingState ? (
     <View style={styles.emptyState}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
     </View>
@@ -195,22 +195,7 @@ export function MobileSessionActiveContent({
       )}
     </View>
   ) : (
-    <View
-      // Why: react-native-web observes onLayout only on a View that mounts with it; unkeyed, this reuses the loading View and never reports.
-      key="terminal-frame"
-      style={styles.terminalFrame}
-      onLayout={(e) => {
-        // Why: one unrounded width for every fit — the first subscribe's and each refit's.
-        const { width, height } = e.nativeEvent.layout
-        terminalFrameHeightRef.current = height
-        terminalFrameWidthRef.current = width
-        // Why: notify height imperatively so dock settling re-fits the PTY without rerendering SessionScreen.
-        const nextHeight = Math.round(height)
-        setTerminalFrameWidth((prev) => (prev === width ? prev : width))
-        notifyTerminalFrameHeight(nextHeight)
-        handleTerminalFrameLayout()
-      }}
-    >
+    <View style={styles.terminalFrame}>
       {terminals.map((terminal) => (
         <TerminalPaneView
           key={terminal.handle}
@@ -261,6 +246,25 @@ export function MobileSessionActiveContent({
           <Text style={styles.toastText}>{toastMessage}</Text>
         </Animated.View>
       )}
+    </View>
+  )
+  return (
+    <View
+      // Why: one frame under every branch; react-native-web observes onLayout only on a View that mounts with it.
+      style={styles.contentFrame}
+      onLayout={(e) => {
+        // Why: one unrounded width for every fit — the first subscribe's and each refit's.
+        const { width, height } = e.nativeEvent.layout
+        terminalFrameHeightRef.current = height
+        terminalFrameWidthRef.current = width
+        // Why: notify height imperatively so dock settling re-fits the PTY without rerendering SessionScreen.
+        const nextHeight = Math.round(height)
+        setTerminalFrameWidth((prev) => (prev === width ? prev : width))
+        notifyTerminalFrameHeight(nextHeight)
+        handleTerminalFrameLayout()
+      }}
+    >
+      {content}
     </View>
   )
 }

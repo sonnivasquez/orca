@@ -187,10 +187,10 @@ export type TerminalDocumentState = {
   removeWebglRecovery: (() => void) | null
   /** `fit-scale`: the generation of the retry loop; a bump abandons the one in flight. */
   fitRetryToken: number
-  /** `fit-scale`: the viewport box the last fit was committed for, or null before one. */
-  fittedBox: { width: number; height: number } | null
   /** `host-message-router`: the terminal frame React Native last measured with, or null before one. */
   hostFrame: { width: number; height: number } | null
+  /** `fit-scale`: the reason of a fit held while the host is hidden, or null when none is owed. */
+  fitPending: string | null
   /** `mouse-click-drag`: the mouse gesture in progress, or null. */
   mouseGesture: TerminalMouseGesture | null
   /** `tap-dispatch`: what the document-level dispatcher has latched onto. */
@@ -318,8 +318,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
     removeTapDispatch: null,
     removeWebglRecovery: null,
     fitRetryToken: 0,
-    fittedBox: null,
     hostFrame: null,
+    fitPending: null,
     mouseGesture: null,
     touchDispatch: {
       mode: 'idle',
