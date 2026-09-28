@@ -135,6 +135,24 @@ describe('a started document', () => {
   const boxes = (posted: Record<string, unknown>[]) =>
     posted.filter((m) => m.type === 'cell-metrics').map((m) => m.cellMetrics)
 
+  it('takes the frame the app laid out from init, as from a measure', () => {
+    const { scope } = started()
+    try {
+      handleMsg(scope, {
+        type: 'init',
+        cols: 55,
+        rows: 47,
+        initialData: '',
+        preserveScroll: false,
+        containerWidth: 427.5,
+        containerHeight: 710
+      })
+      expect(scope.hostFrame).toEqual({ width: 427.5, height: 710 })
+    } finally {
+      stopTerminalDocument(scope)
+    }
+  })
+
   it('reports ready with the box its own terminal laid out, at the app text scale', () => {
     const { scope, posted, built } = started({ initialTextScale: () => 1.25 })
     try {

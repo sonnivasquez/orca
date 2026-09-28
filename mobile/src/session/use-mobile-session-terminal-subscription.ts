@@ -49,6 +49,11 @@ export function useMobileSessionTerminalSubscription(
   const subscribeToTerminal = useCallback(
     (handle: string) => {
       const diagnostics = terminalDiagnosticsRef.current
+      // Read at each init: the frame the subscribe was sized from, or a later layout's.
+      const terminalFrame = () => ({
+        width: terminalFrameWidthRef.current,
+        height: terminalFrameHeightRef.current
+      })
       const logSkippedGate = (reason: string) =>
         diagnostics.streamSkipped(handle, reason, handle === activeHandleRef.current)
       if (!client) {
@@ -197,7 +202,7 @@ export function useMobileSessionTerminalSubscription(
               })
               return
             }
-            ref.init(cols, rows, initialData, false, oscLinks)
+            ref.init(cols, rows, initialData, false, oscLinks, terminalFrame())
             initializedHandlesRef.current.add(handle)
             if (data.displayMode) {
               const displayMode = data.displayMode as MobileDisplayMode
@@ -266,7 +271,7 @@ export function useMobileSessionTerminalSubscription(
             diagnostics.streamResized(handle, seq, eventSeq, data, getTerminalRef(handle) != null)
             const oscLinks = isTerminalOscLinkRanges(data.oscLinks) ? data.oscLinks : undefined
             if (serialized != null) {
-              getTerminalRef(handle)?.init(cols, rows, serialized, true, oscLinks)
+              getTerminalRef(handle)?.init(cols, rows, serialized, true, oscLinks, terminalFrame())
             } else {
               getTerminalRef(handle)?.resize(cols, rows)
             }

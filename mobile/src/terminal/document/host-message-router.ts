@@ -32,6 +32,13 @@ export type TerminalHostMessage = {
   containerWidth?: number
 }
 
+/** The frame React Native laid out, from an init or a measure; null when it has no size. */
+function hostFrameOf(msg: TerminalHostMessage) {
+  const width = typeof msg.containerWidth === 'number' ? msg.containerWidth : 0
+  const height = typeof msg.containerHeight === 'number' ? msg.containerHeight : 0
+  return width > 0 && height > 0 ? { width, height } : null
+}
+
 export function measureFitDimensions(
   scope: TerminalDocumentScope,
   frame: { width: number; height: number },
@@ -107,6 +114,7 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
   if (msg.type === 'ping') {
     notify(scope, { type: 'pong', pingId: msg.id })
   } else if (msg.type === 'init') {
+    scope.hostFrame = hostFrameOf(msg) ?? scope.hostFrame
     init(
       scope,
       msg.cols!,
@@ -162,12 +170,11 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
       cancelSelect(scope)
     }
   } else if (msg.type === 'measure') {
-    const width = typeof msg.containerWidth === 'number' ? msg.containerWidth : 0
-    const height = typeof msg.containerHeight === 'number' ? msg.containerHeight : 0
+    const frame = hostFrameOf(msg)
     // Why: the frame React Native laid out is the only box a fit reads; without it there is none.
-    if (width > 0 && height > 0) {
-      scope.hostFrame = { width, height }
-      measureFitDimensions(scope, { width, height })
+    if (frame) {
+      scope.hostFrame = frame
+      measureFitDimensions(scope, frame)
     } else {
       notify(scope, { type: 'measure-result', cols: null, rows: null })
     }

@@ -266,7 +266,16 @@ function startMeasuredDocument() {
     createUnicode11Addon: () => null,
     createWebglAddon: () => null
   })
-  started.send({ type: 'init', cols: 80, rows: 24, initialData: '', preserveScroll: false })
+  // The app's init carries the frame it laid out.
+  started.send({
+    type: 'init',
+    cols: 80,
+    rows: 24,
+    initialData: '',
+    preserveScroll: false,
+    containerWidth: 412,
+    containerHeight: 600
+  })
   const write = () => parsedWrites.forEach((listener) => listener())
   return { started, posted, surface: surfaceOf(host), write }
 }

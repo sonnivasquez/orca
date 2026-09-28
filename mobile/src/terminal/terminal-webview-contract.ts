@@ -103,7 +103,9 @@ export type TerminalWebViewHandle = {
     rows: number,
     initialData?: string,
     preserveScroll?: boolean,
-    oscLinks?: TerminalOscLinkRange[]
+    oscLinks?: TerminalOscLinkRange[],
+    // Why: the frame the app laid out; the document fits a later text-size change to it.
+    frame?: { width: number; height: number }
   ) => void
   resize: (cols: number, rows: number) => void
   // Why: reflow the local xterm buffer (scrollback included) to a new width

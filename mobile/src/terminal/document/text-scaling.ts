@@ -78,9 +78,12 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
     }
     const cellW = getCellWidth(scope)
     const cellH = getCellHeight(scope)
-    // Why: fit the frame React Native measured with, by the same formula; a subscribe sized from
-    // the ready box sends no measure, so until one the document's own viewport stands in.
-    const frame = scope.hostFrame ?? scope.viewportRect()
+    // Why: fit the frame React Native laid out, by the same formula; init and measure give it, and a
+    // document without either has no terminal to resize.
+    const frame = scope.hostFrame
+    if (!frame) {
+      return
+    }
     if (cellW > 0 && cellH > 0) {
       const fit = fitDimensionsFromCell(
         { cellWidth: cellW, cellHeight: cellH },

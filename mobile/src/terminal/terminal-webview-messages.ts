@@ -16,6 +16,9 @@ export type TerminalWebViewCommand =
       // Why: width-reflow re-streams replay the same content rewrapped at new
       // cols; preserve the reader's scroll position instead of jumping to bottom.
       preserveScroll?: boolean
+      // Why: the frame React Native laid out, so a text-size change fits it before any measure.
+      containerWidth?: number
+      containerHeight?: number
     }
   | { type: 'set-font-scale'; id?: number; fontScale: number }
   | { type: 'resize'; id?: number; cols: number; rows: number }

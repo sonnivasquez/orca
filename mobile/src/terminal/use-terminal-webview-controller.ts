@@ -281,7 +281,8 @@ export function useTerminalWebViewController(
         rows: number,
         initialData?: string,
         preserveScroll?: boolean,
-        oscLinks?: TerminalOscLinkRange[]
+        oscLinks?: TerminalOscLinkRange[],
+        frame?: { width: number; height: number }
       ) {
         // Why: arm a fresh ready promise BEFORE posting init. The document resolves it via the
         // 'ready' notify at the end of its rAF chain.
@@ -297,7 +298,9 @@ export function useTerminalWebViewController(
           oscLinks,
           terminalTheme,
           fontScale: textScale,
-          preserveScroll
+          preserveScroll,
+          containerWidth: frame?.width,
+          containerHeight: frame?.height
         })
       },
       resize(cols: number, rows: number) {
